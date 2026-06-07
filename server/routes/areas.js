@@ -67,6 +67,33 @@ router.get('/metro-lines', (req, res) => {
   res.json(lines);
 });
 
+// Log a search/view for an area
+router.post('/:id/view', (req, res) => {
+  const area = db.prepare('SELECT id FROM areas WHERE id = ?').get(req.params.id);
+  if (!area) return res.status(404).json({ error: '地区不存在' });
+  db.prepare('INSERT INTO search_logs (area_id) VALUES (?)').run(req.params.id);
+  res.json({ ok: true });
+});
+
+// Hot search ranking (last 30 days)
+router.get('/hot-search', (req, res) => {
+  const rows = db.prepare(`
+    SELECT a.id, a.name, a.district, a.metro_line, a.avg_score,
+      COUNT(sl.id) as search_count
+    FROM search_logs sl
+    JOIN (
+      SELECT a2.*, COALESCE(ROUND(AVG(ar.score), 1), 0) as avg_score
+      FROM areas a2 LEFT JOIN area_ratings ar ON a2.id = ar.area_id
+      GROUP BY a2.id
+    ) a ON a.id = sl.area_id
+    WHERE sl.searched_at >= datetime('now', 'localtime', '-30 days')
+    GROUP BY sl.area_id
+    ORDER BY search_count DESC
+    LIMIT 10
+  `).all();
+  res.json(rows);
+});
+
 router.get('/:id', (req, res) => {
   const area = db.prepare('SELECT * FROM areas WHERE id = ?').get(req.params.id);
   if (!area) return res.status(404).json({ error: '地区不存在' });

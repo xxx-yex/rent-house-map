@@ -5,6 +5,7 @@
         <router-link to="/" class="nav-logo">租房地图</router-link>
         <div class="nav-links">
           <router-link to="/" class="nav-item">首页</router-link>
+          <router-link to="/map" class="nav-item">地图</router-link>
           <router-link to="/areas" class="nav-item">地区</router-link>
         </div>
       </div>

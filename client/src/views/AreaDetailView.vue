@@ -2,45 +2,23 @@
   <div class="page">
     <header class="area-header">
       <router-link to="/areas" class="back">← 返回</router-link>
-      <h2>棠下</h2>
-      <p class="meta">天河区 · 21号线</p>
-      <p class="desc">棠下村是天河区典型城中村，靠近BRT棠下站，生活便利但巷子较深</p>
+      <h2>{{ area.name || '-' }}</h2>
+      <p class="meta">{{ area.district || '-' }} · {{ area.metro_line || '-' }}</p>
+      <p class="desc">{{ area.description || '' }}</p>
     </header>
 
-    <!-- PC端：评分+规则并排 -->
     <div class="detail-grid">
       <div class="detail-left">
         <!-- 地区评分 -->
         <div class="section">
           <div class="section-title">地区评分</div>
           <div class="card">
-            <div class="rating-row">
-              <span class="dim-label">环境卫生</span>
+            <div v-for="dim in ratingDims" :key="dim.key" class="rating-row">
+              <span class="dim-label">{{ dim.label }}</span>
               <div class="rating-bar-bg">
-                <div class="rating-bar-fill" style="width:50%"></div>
+                <div class="rating-bar-fill" :style="{ width: (area.ratings?.[dim.key] || 0) / 5 * 100 + '%' }"></div>
               </div>
-              <span class="dim-score">2.5</span>
-            </div>
-            <div class="rating-row">
-              <span class="dim-label">便利程度</span>
-              <div class="rating-bar-bg">
-                <div class="rating-bar-fill" style="width:80%"></div>
-              </div>
-              <span class="dim-score">4.0</span>
-            </div>
-            <div class="rating-row">
-              <span class="dim-label">安全感</span>
-              <div class="rating-bar-bg">
-                <div class="rating-bar-fill" style="width:60%"></div>
-              </div>
-              <span class="dim-score">3.0</span>
-            </div>
-            <div class="rating-row">
-              <span class="dim-label">综合评分</span>
-              <div class="rating-bar-bg">
-                <div class="rating-bar-fill" style="width:64%"></div>
-              </div>
-              <span class="dim-score">3.2</span>
+              <span class="dim-score">{{ area.ratings?.[dim.key] || '-' }}</span>
             </div>
           </div>
         </div>
@@ -51,110 +29,99 @@
           <div class="card rules-grid">
             <div class="rule-item">
               <span class="rule-label">付款方式</span>
-              <span class="rule-value">押一付一</span>
+              <span class="rule-value">{{ area.rules?.payment_method || '-' }}</span>
             </div>
             <div class="rule-item">
               <span class="rule-label">短租费</span>
-              <span class="rule-value">短租加收200/月</span>
+              <span class="rule-value">{{ area.rules?.short_term_fee || '-' }}</span>
             </div>
             <div class="rule-item">
               <span class="rule-label">水费</span>
-              <span class="rule-value">6元/吨</span>
+              <span class="rule-value">{{ area.rules?.water_rate || '-' }}</span>
             </div>
             <div class="rule-item">
               <span class="rule-label">电费</span>
-              <span class="rule-value">1.5元/度</span>
+              <span class="rule-value">{{ area.rules?.electricity_rate || '-' }}</span>
             </div>
             <div class="rule-item">
               <span class="rule-label">其他费用</span>
-              <span class="rule-value">管理费50/月</span>
+              <span class="rule-value">{{ area.rules?.other_fees || '-' }}</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 房东列表：PC端右侧 / 移动端下方 -->
+      <!-- 房东列表 -->
       <div class="detail-right">
         <div class="section">
-          <div class="section-title">房东/中介评价（5）</div>
+          <div class="section-title">房东/中介评价（{{ landlords.length }}）</div>
 
-          <div class="card landlord-card">
-            <div class="landlord-header">
-              <span class="landlord-name">张阿姨</span>
-              <span class="landlord-type">房东</span>
-              <span class="landlord-score score-good">4.5</span>
-            </div>
-            <div class="tags-row">
-              <span class="tag tag-red">维修积极</span>
-              <span class="tag tag-red">押金秒退</span>
-            </div>
-            <p class="landlord-comment">住了两年，阿姨人很好，有问题随叫随到</p>
+          <div v-if="landlords.length === 0" class="card empty-card">
+            <div class="empty-icon">?</div>
+            <div class="empty-text">未知区域待探索</div>
+            <div class="empty-sub">暂无房东/中介评价数据</div>
           </div>
 
-          <div class="card landlord-card">
+          <div v-for="l in landlords" :key="l.id" class="card landlord-card">
             <div class="landlord-header">
-              <span class="landlord-name">李哥租房</span>
-              <span class="landlord-type">中介</span>
-              <span class="landlord-score score-bad">2.1</span>
+              <span class="landlord-name">{{ l.name }}</span>
+              <span class="landlord-type">{{ l.is_agent ? '中介' : '房东' }}</span>
+              <span class="landlord-score" :class="l.score >= 3 ? 'score-good' : 'score-bad'">{{ l.score }}</span>
             </div>
             <div class="tags-row">
-              <span class="tag tag-black">押金不退</span>
-              <span class="tag tag-black">隐性收费</span>
+              <span v-for="tag in l.redTags" :key="tag" class="tag tag-red">{{ tag }}</span>
+              <span v-for="tag in l.blackTags" :key="tag" class="tag tag-black">{{ tag }}</span>
             </div>
-            <p class="landlord-comment">退房时扣了800块各种费用，不给明细</p>
-          </div>
-
-          <div class="card landlord-card">
-            <div class="landlord-header">
-              <span class="landlord-name">王叔</span>
-              <span class="landlord-type">房东</span>
-              <span class="landlord-score score-good">4.0</span>
-            </div>
-            <div class="tags-row">
-              <span class="tag tag-red">态度友好</span>
-              <span class="tag tag-red">价格公道</span>
-              <span class="tag tag-black">维修拖延</span>
-            </div>
-            <p class="landlord-comment">人不错就是修东西比较慢</p>
-          </div>
-
-          <div class="card landlord-card">
-            <div class="landlord-header">
-              <span class="landlord-name">赵某</span>
-              <span class="landlord-type">房东</span>
-              <span class="landlord-score score-bad">1.5</span>
-            </div>
-            <div class="tags-row">
-              <span class="tag tag-black">押金不退</span>
-              <span class="tag tag-black">态度恶劣</span>
-              <span class="tag tag-black">随意涨租</span>
-            </div>
-            <p class="landlord-comment">第二年直接涨租500，不同意就搬走，押金也不退</p>
-          </div>
-
-          <div class="card landlord-card">
-            <div class="landlord-header">
-              <span class="landlord-name">周阿姨</span>
-              <span class="landlord-type">房东</span>
-              <span class="landlord-score score-good">4.5</span>
-            </div>
-            <div class="tags-row">
-              <span class="tag tag-red">押金秒退</span>
-              <span class="tag tag-red">态度友好</span>
-              <span class="tag tag-red">价格公道</span>
-            </div>
-            <p class="landlord-comment">良心房东，住了一年多很舒心</p>
+            <p v-if="l.comment" class="landlord-comment">{{ l.comment }}</p>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 提交入口 -->
     <div class="section" style="text-align:center; margin-top:8px;">
       <router-link to="/submit" class="btn btn-primary">提交租房评价</router-link>
     </div>
   </div>
 </template>
+
+<script>
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+
+const RATING_DIMS = [
+  { key: 'sanitation', label: '环境卫生' },
+  { key: 'convenience', label: '便利程度' },
+  { key: 'safety', label: '安全感' },
+  { key: 'overall', label: '综合评分' },
+]
+
+export default {
+  setup() {
+    const route = useRoute()
+    const area = ref({})
+    const landlords = ref([])
+    const ratingDims = RATING_DIMS
+
+    onMounted(async () => {
+      const id = route.params.id
+      const [areaData, landlordData] = await Promise.all([
+        fetch('/api/areas/' + id).then(r => r.json()),
+        fetch('/api/areas/' + id + '/landlords').then(r => r.json()),
+      ])
+      area.value = areaData
+      // Log view for hot search ranking
+      fetch('/api/areas/' + id + '/view', { method: 'POST' }).catch(() => {})
+      landlords.value = (landlordData.landlords || landlordData || []).map(l => ({
+        ...l,
+        redTags: typeof l.red_tags === 'string' ? JSON.parse(l.red_tags || '[]') : (l.red_tags || []),
+        blackTags: typeof l.black_tags === 'string' ? JSON.parse(l.black_tags || '[]') : (l.black_tags || []),
+      }))
+    })
+
+    return { area, landlords, ratingDims }
+  }
+}
+</script>
 
 <style scoped>
 .area-header { margin-bottom: 20px; }
@@ -163,7 +130,6 @@
 .meta { font-size: 13px; color: var(--text-200); margin-top: 2px; }
 .desc { font-size: 14px; color: var(--text-200); margin-top: 8px; line-height: 1.5; }
 
-/* 移动端：上下排列 */
 .detail-grid {
   display: flex;
   flex-direction: column;
@@ -189,7 +155,11 @@
 .tags-row { margin-top: 8px; }
 .landlord-comment { margin-top: 8px; font-size: 13px; color: var(--text-200); line-height: 1.5; }
 
-/* PC端：左右分栏 */
+.empty-card { text-align: center; padding: 32px 16px; }
+.empty-icon { font-size: 36px; color: var(--bg-300); margin-bottom: 8px; }
+.empty-text { font-size: 16px; font-weight: 600; color: var(--text-100); }
+.empty-sub { font-size: 13px; color: var(--text-200); margin-top: 4px; }
+
 @media (min-width: 768px) {
   .area-header h2 { font-size: 28px; }
   .meta { font-size: 14px; }
