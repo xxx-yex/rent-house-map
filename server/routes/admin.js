@@ -58,9 +58,10 @@ function getApprovalHandler(type, payload) {
   switch (type) {
     case 'landlord':
       return () => {
+        const proofImages = JSON.parse(submission.proof_images || '[]');
         db.prepare(`
-          INSERT INTO landlords (area_id, name, is_agent, score, red_tags, black_tags, comment)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO landlords (area_id, name, is_agent, score, red_tags, black_tags, comment, proof_images)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           payload.area_id,
           payload.name,
@@ -68,7 +69,8 @@ function getApprovalHandler(type, payload) {
           payload.score || 0,
           JSON.stringify(payload.red_tags || []),
           JSON.stringify(payload.black_tags || []),
-          payload.comment || ''
+          payload.comment || '',
+          JSON.stringify(proofImages)
         );
       };
 

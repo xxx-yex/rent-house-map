@@ -131,3 +131,27 @@ a { color: var(--primary-300); text-decoration: none; }
 
 .loading { text-align: center; padding: 40px; color: var(--text-200); }
 .empty { text-align: center; padding: 40px; color: var(--text-200); font-size: 14px; }
+
+/* Tag pop animation */
+.tag-pop {
+  opacity: 0;
+  transform: scale(0.5);
+}
+.tag-pop.revealed {
+  animation: tagPop 0.3s ease-out forwards;
+}
+.tag-pop.revealed:nth-child(1) { animation-delay: 0s; }
+.tag-pop.revealed:nth-child(2) { animation-delay: 0.05s; }
+.tag-pop.revealed:nth-child(3) { animation-delay: 0.1s; }
+.tag-pop.revealed:nth-child(4) { animation-delay: 0.15s; }
+.tag-pop.revealed:nth-child(5) { animation-delay: 0.2s; }
+.tag-pop.revealed:nth-child(6) { animation-delay: 0.25s; }
+.tag-pop.revealed:nth-child(7) { animation-delay: 0.3s; }
+.tag-pop.revealed:nth-child(8) { animation-delay: 0.35s; }
+.tag-pop.revealed:nth-child(9) { animation-delay: 0.4s; }
+.tag-pop.revealed:nth-child(10) { animation-delay: 0.45s; }
+
+@keyframes tagPop {
+  from { opacity: 0; transform: scale(0.5); }
+  to { opacity: 1; transform: scale(1); }
+}

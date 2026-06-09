@@ -21,6 +21,13 @@
       <pre class="sub-payload">{{ JSON.stringify(item.payload, null, 2) }}</pre>
       <p v-if="item.submitter_note" class="sub-note">备注：{{ item.submitter_note }}</p>
 
+      <div v-if="item.proof_images && item.proof_images.length" class="proof-images">
+        <span class="proof-label">凭证图片：</span>
+        <div class="proof-list">
+          <img v-for="url in item.proof_images" :key="url" :src="url" class="proof-thumb" @click="previewImage(url)" />
+        </div>
+      </div>
+
       <div v-if="status === 'pending'" class="sub-actions">
         <button class="btn btn-primary" @click="review(item.id, 'approved')">通过</button>
         <button class="btn" style="background:var(--red-badge);color:#fff" @click="review(item.id, 'rejected')">拒绝</button>
@@ -29,20 +36,24 @@
         {{ item.status === 'approved' ? '已通过' : '已拒绝' }}
       </div>
     </div>
+
+    <!-- 图片预览 -->
+    <div v-if="previewUrl" class="preview-overlay" @click="previewUrl = null">
+      <img :src="previewUrl" class="preview-img" />
+    </div>
   </div>
 </template>
 
 <script>
-import axios from 'axios'
+import api from '../../api'
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 
 export default {
   setup() {
     const list = ref([])
     const loading = ref(true)
     const status = ref('pending')
-    const router = useRouter()
+    const previewUrl = ref(null)
 
     const tabs = [
       { value: 'pending', label: '待审核' },
@@ -58,7 +69,7 @@ export default {
 
     function getAuthHeaders() {
       const token = localStorage.getItem('admin_token')
-      if (!token) { router.push('/admin/login'); return null }
+      if (!token) return null
       return { Authorization: `Bearer ${token}` }
     }
 
@@ -66,7 +77,7 @@ export default {
       const headers = getAuthHeaders()
       if (!headers) return
       loading.value = true
-      const { data } = await axios.get('/api/admin/submissions', { params: { status: status.value }, headers })
+      const data = await api.get('/admin/submissions', { params: { status: status.value }, headers })
       list.value = data
       loading.value = false
     }
@@ -74,13 +85,17 @@ export default {
     async function review(id, newStatus) {
       const headers = getAuthHeaders()
       if (!headers) return
-      await axios.put(`/api/admin/submissions/${id}`, { status: newStatus }, { headers })
+      await api.put(`/admin/submissions/${id}`, { status: newStatus }, { headers })
       load()
     }
 
     onMounted(load)
 
-    return { list, loading, status, tabs, typeLabels, load, review }
+    function previewImage(url) {
+      previewUrl.value = url
+    }
+
+    return { list, loading, status, tabs, typeLabels, load, review, previewUrl, previewImage }
   }
 }
 </script>
@@ -115,4 +130,14 @@ export default {
 .sub-status { margin-top: 10px; font-size: 13px; font-weight: 600; }
 .sub-status.approved { color: var(--primary-300); }
 .sub-status.rejected { color: var(--red-badge); }
+
+.proof-images { margin-top: 8px; }
+.proof-label { font-size: 12px; color: var(--text-200); }
+.proof-list { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.proof-thumb { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 1px solid var(--bg-200); }
+.preview-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9999;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.preview-img { max-width: 90%; max-height: 90%; border-radius: 8px; }
 </style>

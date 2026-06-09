@@ -7,3 +7,7 @@ server/db/*.db-wal
 server/uploads/
 .env
 .DS_Store
+docs/
+data/
+client/dist/
+.claude/

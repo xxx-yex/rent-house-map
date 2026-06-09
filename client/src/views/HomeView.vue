@@ -19,14 +19,18 @@
         <div v-if="searchKeyword.trim()" class="search-results card">
           <div v-if="searchResults.length === 0" class="search-empty">未找到匹配的地区</div>
           <router-link v-for="area in searchResults" :key="area.id" :to="`/areas/${area.id}`" class="search-result-item" @click="searchKeyword = ''">
-            <span class="search-result-name">{{ area.name }}</span>
-            <span class="search-result-meta">{{ area.district }} · {{ area.metro_line }}</span>
+            <span class="search-result-name" v-html="highlight(area.name, searchKeyword)"></span>
+            <span class="search-result-meta" v-html="highlight(area.district + ' · ' + area.metro_line, searchKeyword)"></span>
           </router-link>
         </div>
       </div>
 
       <!-- 按地铁线路展示热门 -->
-      <div v-if="hotList.length > 0" class="section">
+      <div v-if="loading" class="section">
+        <div class="section-title">热搜榜 <span class="hot-sub">近30天</span></div>
+        <SkeletonCard v-for="i in 5" :key="i" :compact="true" />
+      </div>
+      <div v-else-if="hotList.length > 0" class="section">
         <div class="section-title">热搜榜 <span class="hot-sub">近30天</span></div>
         <div class="hot-list">
           <router-link v-for="(item, idx) in hotList" :key="item.id" :to="`/areas/${item.id}`" class="hot-item">
@@ -42,33 +46,38 @@
 
       <div class="section">
         <div class="section-title">按地铁线路选房</div>
-        <div class="line-tabs">
-          <button
-            v-for="line in availableLines"
-            :key="line"
-            class="line-tab"
-            :class="{ active: selectedLine === line }"
-            :style="selectedLine === line ? { background: lineColors[line] || '#666', color: '#fff' } : {}"
-            @click="selectedLine = line"
-          >{{ line }}</button>
+        <div v-if="loading" class="area-grid">
+          <SkeletonCard v-for="i in 4" :key="i" />
         </div>
-        <div v-if="currentLineAreas.length" class="area-grid">
-          <router-link v-for="area in currentLineAreas" :key="area.id" :to="`/areas/${area.id}`" class="area-card card">
-            <div class="area-name">{{ area.name }}</div>
-            <div class="area-meta">{{ area.district }}</div>
-            <div class="area-score">
-              <span class="score-num">{{ area.avg_score }}</span>
-              <span class="score-label">综合</span>
-            </div>
-            <div class="area-count">{{ area.landlord_count }} 条评价</div>
-          </router-link>
-        </div>
-        <div v-else class="line-empty">该线路暂无地区数据</div>
+        <template v-else>
+          <div class="line-tabs">
+            <button
+              v-for="line in availableLines"
+              :key="line"
+              class="line-tab"
+              :class="{ active: selectedLine === line }"
+              :style="selectedLine === line ? { background: lineColors[line] || '#666', color: '#fff' } : {}"
+              @click="selectedLine = line"
+            >{{ line }}</button>
+          </div>
+          <div v-if="currentLineAreas.length" class="area-grid">
+            <router-link v-for="area in currentLineAreas" :key="area.id" :to="`/areas/${area.id}`" class="area-card card">
+              <div class="area-name">{{ area.name }}</div>
+              <div class="area-meta">{{ area.district }}</div>
+              <div class="area-score">
+                <span class="score-num">{{ area.avg_score }}</span>
+                <span class="score-label">综合</span>
+              </div>
+              <div class="area-count">{{ area.landlord_count }} 条评价</div>
+            </router-link>
+          </div>
+          <div v-else class="line-empty">该线路暂无地区数据</div>
+        </template>
       </div>
 
-      <div class="section" style="text-align:center; margin-top:16px;">
+      <div v-if="!loading" class="section" style="text-align:center; margin-top:16px;">
         <router-link to="/map" class="btn btn-primary" style="margin-right:8px;">查看地铁地图</router-link>
-        <router-link to="/areas" class="btn btn-primary" style="background:#fff;color:var(--primary-300);border:1px solid var(--primary-300);">查看全部 42 个地区</router-link>
+        <router-link v-if="areas.length" to="/areas" class="btn btn-primary" style="background:#fff;color:var(--primary-300);border:1px solid var(--primary-300);">查看全部 {{ areas.length }} 个地区</router-link>
       </div>
     </div>
   </div>
@@ -76,7 +85,9 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue'
+import api from '../api'
 import HeroAnimation from '../components/HeroAnimation.vue'
+import SkeletonCard from '../components/SkeletonCard.vue'
 
 const lineColors = {
   '1号线': '#F3D03E', '2号线': '#00629B', '3号线': '#ECA21C',
@@ -90,13 +101,15 @@ const lineColors = {
 const HOT_LINES = ['3号线', '5号线', '8号线', '2号线', '4号线', '6号线']
 
 export default {
-  components: { HeroAnimation },
+  components: { HeroAnimation, SkeletonCard },
   setup() {
     const areas = ref([])
     const hotList = ref([])
     const searchKeyword = ref('')
     const searchResults = ref([])
     const selectedLine = ref('')
+    const loading = ref(true)
+    let searchTimer = null
 
     function parseMetroLines(metroLine) {
       const parts = metroLine.split('/')
@@ -111,35 +124,48 @@ export default {
     }
 
     onMounted(async () => {
-      const [areasData, hotData] = await Promise.all([
-        fetch('/api/areas').then(r => r.json()),
-        fetch('/api/areas/hot-search').then(r => r.json()),
-      ])
-      areas.value = areasData
-      hotList.value = hotData
-      // 默认选中第一条可用线路
-      const map = {}
-      areasData.forEach(a => {
-        parseMetroLines(a.metro_line).forEach(line => {
-          if (!map[line]) map[line] = true
+      try {
+        const [areasData, hotData] = await Promise.all([
+          api.get('/areas'),
+          api.get('/areas/hot-search'),
+        ])
+        areas.value = areasData
+        hotList.value = hotData
+        const map = {}
+        areasData.forEach(a => {
+          parseMetroLines(a.metro_line).forEach(line => {
+            if (!map[line]) map[line] = true
+          })
         })
-      })
-      const allLines = Object.keys(map)
-      const hotFirst = HOT_LINES.find(l => allLines.includes(l))
-      selectedLine.value = hotFirst || allLines[0] || ''
+        const allLines = Object.keys(map)
+        const hotFirst = HOT_LINES.find(l => allLines.includes(l))
+        selectedLine.value = hotFirst || allLines[0] || ''
+      } finally {
+        loading.value = false
+      }
     })
 
     function onSearch() {
-      const kw = searchKeyword.value.trim().toLowerCase()
-      if (!kw) {
-        searchResults.value = []
-        return
-      }
-      searchResults.value = areas.value.filter(a =>
-        a.name.toLowerCase().includes(kw) ||
-        a.district.toLowerCase().includes(kw) ||
-        a.metro_line.toLowerCase().includes(kw)
-      )
+      clearTimeout(searchTimer)
+      searchTimer = setTimeout(() => {
+        const kw = searchKeyword.value.trim().toLowerCase()
+        if (!kw) {
+          searchResults.value = []
+          return
+        }
+        searchResults.value = areas.value.filter(a =>
+          a.name.toLowerCase().includes(kw) ||
+          a.district.toLowerCase().includes(kw) ||
+          a.metro_line.toLowerCase().includes(kw)
+        )
+      }, 300)
+    }
+
+    function highlight(text, keyword) {
+      if (!keyword || !keyword.trim()) return text
+      const kw = keyword.trim()
+      const regex = new RegExp(`(${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+      return text.replace(regex, '<mark>$1</mark>')
     }
 
     const lineAreaMap = computed(() => {
@@ -165,7 +191,7 @@ export default {
 
     const currentLineAreas = computed(() => lineAreaMap.value[selectedLine.value] || [])
 
-    return { areas, hotList, lineColors, searchKeyword, searchResults, onSearch, selectedLine, availableLines, currentLineAreas }
+    return { areas, hotList, lineColors, searchKeyword, searchResults, onSearch, highlight, selectedLine, availableLines, currentLineAreas, loading }
   }
 }
 </script>
@@ -194,6 +220,8 @@ export default {
 .search-result-item:hover { background: var(--bg-100); }
 .search-result-name { font-size: 14px; font-weight: 600; }
 .search-result-meta { font-size: 12px; color: var(--text-200); flex-shrink: 0; margin-left: 12px; }
+
+mark { background: #19725d; color: #fff; border-radius: 2px; padding: 0 2px; }
 
 .line-tabs {
   display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px;

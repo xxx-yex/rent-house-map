@@ -13,8 +13,17 @@
     <main class="main-content">
       <router-view />
     </main>
+    <ToastNotification />
   </div>
 </template>
+
+<script>
+import ToastNotification from './components/ToastNotification.vue'
+
+export default {
+  components: { ToastNotification }
+}
+</script>
 
 <style scoped>
 #app-root {

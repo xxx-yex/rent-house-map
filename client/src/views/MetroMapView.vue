@@ -1,7 +1,12 @@
 <template>
   <div class="map-page">
-    <div id="metro-map-container"></div>
-    <div class="map-legend">
+    <div id="metro-map-container">
+      <div v-if="loading" class="map-loading">
+        <div class="loading-spinner"></div>
+        <p>地图加载中...</p>
+      </div>
+    </div>
+    <div v-if="!loading" class="map-legend">
       <div class="legend-title">地铁线路</div>
       <div class="legend-items">
         <span v-for="(color, line) in LINE_COLORS" :key="line" class="legend-item"
@@ -18,6 +23,7 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import AMapLoader from '@amap/amap-jsapi-loader'
+import api from '../api'
 
 const LINE_COLORS = {
   '1号线': '#F3D03E', '2号线': '#00629B', '3号线': '#ECA21C',
@@ -64,12 +70,14 @@ export default {
   setup() {
     const router = useRouter()
     const activeLine = ref(null)
+    const loading = ref(true)
     let mapInstance = null
     const markers = []
     const polylines = []
 
     onMounted(async () => {
-      const areas = await fetch('/api/areas').then(r => r.json())
+      const areas = await api.get('/areas')
+      loading.value = false
 
       const AMap = await AMapLoader.load({
         key: '6ae35c1718f482e6e4e811a092a06add',
@@ -228,14 +236,25 @@ export default {
       if (mapInstance) mapInstance.destroy()
     })
 
-    return { LINE_COLORS, activeLine, toggleLine }
+    return { LINE_COLORS, activeLine, toggleLine, loading }
   }
 }
 </script>
 
 <style scoped>
 .map-page { position: relative; width: 100%; height: calc(100vh - 56px); }
-#metro-map-container { width: 100%; height: 100%; }
+#metro-map-container { width: 100%; height: 100%; position: relative; }
+.map-loading {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; background: var(--bg-100); z-index: 10;
+}
+.map-loading p { margin-top: 12px; color: var(--text-200); font-size: 14px; }
+.loading-spinner {
+  width: 32px; height: 32px; border: 3px solid var(--bg-200);
+  border-top-color: var(--primary-300); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .map-legend {
   position: absolute; top: 12px; left: 12px; z-index: 200;

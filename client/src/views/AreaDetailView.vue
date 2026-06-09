@@ -1,5 +1,26 @@
 <template>
   <div class="page">
+    <!-- 加载状态 -->
+    <div v-if="loading" class="detail-grid">
+      <div class="detail-left">
+        <SkeletonCard />
+        <SkeletonCard style="margin-top:16px" />
+      </div>
+      <div class="detail-right">
+        <SkeletonCard />
+        <SkeletonCard style="margin-top:12px" />
+        <SkeletonCard style="margin-top:12px" />
+      </div>
+    </div>
+
+    <!-- 错误状态 -->
+    <div v-else-if="hasError" class="error-state">
+      <p>加载失败，请稍后重试</p>
+      <button class="btn btn-primary" @click="loadData">重新加载</button>
+    </div>
+
+    <!-- 正常内容 -->
+    <template v-else>
     <header class="area-header">
       <router-link to="/areas" class="back">← 返回</router-link>
       <h2>{{ area.name || '-' }}</h2>
@@ -10,13 +31,13 @@
     <div class="detail-grid">
       <div class="detail-left">
         <!-- 地区评分 -->
-        <div class="section">
+        <div class="section" ref="ratingSectionRef">
           <div class="section-title">地区评分</div>
           <div class="card">
             <div v-for="dim in ratingDims" :key="dim.key" class="rating-row">
               <span class="dim-label">{{ dim.label }}</span>
               <div class="rating-bar-bg">
-                <div class="rating-bar-fill" :style="{ width: (area.ratings?.[dim.key] || 0) / 5 * 100 + '%' }"></div>
+                <div class="rating-bar-fill" :style="{ width: ratingVisible ? (area.ratings?.[dim.key] || 0) / 5 * 100 + '%' : '0%' }"></div>
               </div>
               <span class="dim-score">{{ area.ratings?.[dim.key] || '-' }}</span>
             </div>
@@ -69,24 +90,36 @@
               <span class="landlord-score" :class="l.score >= 3 ? 'score-good' : 'score-bad'">{{ l.score }}</span>
             </div>
             <div class="tags-row">
-              <span v-for="tag in l.redTags" :key="tag" class="tag tag-red">{{ tag }}</span>
-              <span v-for="tag in l.blackTags" :key="tag" class="tag tag-black">{{ tag }}</span>
+              <span v-for="tag in l.redTags" :key="tag" class="tag tag-red tag-pop">{{ tag }}</span>
+              <span v-for="tag in l.blackTags" :key="tag" class="tag tag-black tag-pop">{{ tag }}</span>
             </div>
             <p v-if="l.comment" class="landlord-comment">{{ l.comment }}</p>
+            <div v-if="l.proof_images && l.proof_images.length" class="landlord-images">
+              <img v-for="url in l.proof_images" :key="url" :src="url" class="landlord-img" @click="previewUrl = url" />
+            </div>
           </div>
         </div>
       </div>
     </div>
 
     <div class="section" style="text-align:center; margin-top:8px;">
-      <router-link to="/submit" class="btn btn-primary">提交租房评价</router-link>
+      <router-link :to="`/submit?area_id=${area.id}`" class="btn btn-primary">提交租房评价</router-link>
+    </div>
+    </template>
+
+    <!-- 图片预览 -->
+    <div v-if="previewUrl" class="preview-overlay" @click="previewUrl = null">
+      <img :src="previewUrl" class="preview-img" />
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 import { useRoute } from 'vue-router'
+import api from '../api'
+import SkeletonCard from '../components/SkeletonCard.vue'
+import { useScrollReveal } from '../composables/useScrollReveal'
 
 const RATING_DIMS = [
   { key: 'sanitation', label: '环境卫生' },
@@ -96,35 +129,61 @@ const RATING_DIMS = [
 ]
 
 export default {
+  components: { SkeletonCard },
   setup() {
     const route = useRoute()
     const area = ref({})
     const landlords = ref([])
     const ratingDims = RATING_DIMS
+    const loading = ref(true)
+    const hasError = ref(false)
+    const previewUrl = ref(null)
+    const ratingVisible = ref(false)
+    const ratingSectionRef = ref(null)
 
-    onMounted(async () => {
-      const id = route.params.id
-      const [areaData, landlordData] = await Promise.all([
-        fetch('/api/areas/' + id).then(r => r.json()),
-        fetch('/api/areas/' + id + '/landlords').then(r => r.json()),
-      ])
-      area.value = areaData
-      // Log view for hot search ranking
-      fetch('/api/areas/' + id + '/view', { method: 'POST' }).catch(() => {})
-      landlords.value = (landlordData.landlords || landlordData || []).map(l => ({
-        ...l,
-        redTags: typeof l.red_tags === 'string' ? JSON.parse(l.red_tags || '[]') : (l.red_tags || []),
-        blackTags: typeof l.black_tags === 'string' ? JSON.parse(l.black_tags || '[]') : (l.black_tags || []),
-      }))
-    })
+    async function loadData() {
+      loading.value = true
+      hasError.value = false
+      try {
+        const id = route.params.id
+        const [areaData, landlordData] = await Promise.all([
+          api.get('/areas/' + id),
+          api.get('/areas/' + id + '/landlords'),
+        ])
+        area.value = areaData
+        api.post('/areas/' + id + '/view').catch(() => {})
+        landlords.value = (landlordData.list || []).map(l => ({
+          ...l,
+          redTags: typeof l.red_tags === 'string' ? JSON.parse(l.red_tags || '[]') : (l.red_tags || []),
+          blackTags: typeof l.black_tags === 'string' ? JSON.parse(l.black_tags || '[]') : (l.black_tags || []),
+        }))
+      } catch {
+        hasError.value = true
+      } finally {
+        loading.value = false
+        await nextTick()
+        if (ratingSectionRef.value) {
+          const observer = new IntersectionObserver(
+            ([entry]) => { if (entry.isIntersecting) { ratingVisible.value = true; observer.disconnect() } },
+            { threshold: 0.3 }
+          )
+          observer.observe(ratingSectionRef.value)
+        }
+        useScrollReveal('.landlord-card')
+      }
+    }
 
-    return { area, landlords, ratingDims }
+    onMounted(loadData)
+
+    return { area, landlords, ratingDims, loading, hasError, loadData, previewUrl, ratingVisible, ratingSectionRef }
   }
 }
 </script>
 
 <style scoped>
 .area-header { margin-bottom: 20px; }
+.error-state { text-align: center; padding: 60px 16px; color: var(--text-200); }
+.error-state p { margin-bottom: 16px; }
 .back { font-size: 13px; color: var(--text-200); }
 .area-header h2 { font-size: 22px; font-weight: 700; margin-top: 8px; }
 .meta { font-size: 13px; color: var(--text-200); margin-top: 2px; }
@@ -138,7 +197,7 @@ export default {
 .rating-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .dim-label { width: 60px; font-size: 13px; color: var(--text-200); flex-shrink: 0; }
 .rating-bar-bg { flex: 1; height: 8px; background: var(--bg-200); border-radius: 4px; overflow: hidden; }
-.rating-bar-fill { height: 100%; background: var(--primary-300); border-radius: 4px; transition: width 0.3s; }
+.rating-bar-fill { height: 100%; background: var(--primary-300); border-radius: 4px; transition: width 0.8s ease-out; }
 .dim-score { width: 28px; font-size: 14px; font-weight: 600; text-align: right; }
 
 .rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -159,6 +218,14 @@ export default {
 .empty-icon { font-size: 36px; color: var(--bg-300); margin-bottom: 8px; }
 .empty-text { font-size: 16px; font-weight: 600; color: var(--text-100); }
 .empty-sub { font-size: 13px; color: var(--text-200); margin-top: 4px; }
+
+.landlord-images { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+.landlord-img { width: 60px; height: 60px; object-fit: cover; border-radius: 6px; cursor: pointer; border: 1px solid var(--bg-200); }
+.preview-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 9999;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.preview-img { max-width: 90%; max-height: 90%; border-radius: 8px; }
 
 @media (min-width: 768px) {
   .area-header h2 { font-size: 28px; }

@@ -14,8 +14,13 @@
       </div>
     </header>
 
+    <!-- 加载状态 -->
+    <div v-if="loading" class="section">
+      <SkeletonCard v-for="i in 6" :key="i" style="margin-bottom:12px" />
+    </div>
+
     <!-- 按地铁线路分组 -->
-    <div v-for="group in grouped" :key="group.line" class="section">
+    <div v-else v-for="group in grouped" :key="group.line" class="section">
       <div class="line-header">
         <span class="line-badge" :style="{ background: LINE_COLORS[group.line] || '#666' }">{{ group.line }}</span>
         <span class="line-count">{{ group.areas.length }} 个地区</span>
@@ -38,12 +43,14 @@
       </div>
     </div>
 
-    <div v-if="filtered.length === 0" class="empty">暂无匹配的地区</div>
+    <div v-if="!loading && filtered.length === 0" class="empty">暂无匹配的地区</div>
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted } from 'vue'
+import api from '../api'
+import SkeletonCard from '../components/SkeletonCard.vue'
 
 const LINE_COLORS = {
   '1号线': '#F3D03E', '2号线': '#00629B', '3号线': '#ECA21C',
@@ -54,21 +61,27 @@ const LINE_COLORS = {
 }
 
 export default {
+  components: { SkeletonCard },
   setup() {
     const areas = ref([])
     const districts = ref([])
     const metroLines = ref([])
     const filter = ref({ line: '', district: '' })
+    const loading = ref(true)
 
     onMounted(async () => {
-      const [areasData, districtsData, linesData] = await Promise.all([
-        fetch('/api/areas').then(r => r.json()),
-        fetch('/api/areas/districts').then(r => r.json()),
-        fetch('/api/areas/metro-lines').then(r => r.json()),
-      ])
-      areas.value = areasData
-      districts.value = districtsData
-      metroLines.value = linesData
+      try {
+        const [areasData, districtsData, linesData] = await Promise.all([
+          api.get('/areas'),
+          api.get('/areas/districts'),
+          api.get('/areas/metro-lines'),
+        ])
+        areas.value = areasData
+        districts.value = districtsData
+        metroLines.value = linesData
+      } finally {
+        loading.value = false
+      }
     })
 
     const filtered = computed(() => {
@@ -124,7 +137,7 @@ export default {
       return { 'line-color': true }
     }
 
-    return { areas, districts, metroLines, filter, filtered, grouped, filterAreas, lineClass, LINE_COLORS }
+    return { areas, districts, metroLines, filter, filtered, grouped, filterAreas, lineClass, LINE_COLORS, loading }
   }
 }
 </script>
